@@ -1,0 +1,166 @@
+/* Documentation
+@auther- ambarish upadhyay
+contact-akup.240@gmail.com
+SR.No.  Method Name                Created BY      Version     Description
+
+1.      GetMagentoAccessTokenKey     NI              1.00        Create this method for Get Access Token from Magento
+2.      GetCorrectBearerToken        NI              1.00        Create This Method for Changes access Token in Correct Format.
+3.      SetConnect                   NI              1.00        Create This Method for Connect With Magento API's.
+4.      CreateProductFromBC          NI              1.00        Create this Method for Send Product Details From BC To Magento.
+ */
+codeunit 50104 "Magento API Management"
+{
+    trigger OnRun()
+
+    begin
+
+    end;
+    // Begin GetMagentoAccessTokenKey NI 1.00
+    procedure GetMagentoAccessTokenKey(uri: Text) responseText: Text;
+
+    var
+        client: HttpClient;
+        request: HttpRequestMessage;
+        response: HttpResponseMessage;
+        contentHeaders: HttpHeaders;
+        content: HttpContent;
+        TokenJsonText: Text;
+        TokenJObject: JsonObject;
+    begin
+
+        TokenJObject.Add('username', MagentoUserName);
+        TokenJObject.Add('password', MagentoPassword);
+        TokenJObject.WriteTo(TokenJsonText);
+        // Add the payload to the content
+
+        content.WriteFrom(TokenJsonText);
+        // Retrieve the contentHeaders associated with the content
+        content.GetHeaders(contentHeaders);
+        contentHeaders.Clear();
+        contentHeaders.Add('Content-Type', 'application/json');
+        request.Content := content;
+        request.SetRequestUri(uri);
+        request.Method := 'POST';
+        client.Send(request, response);
+        // Read the response content as json.
+        response.Content().ReadAs(responseText);
+        //Message(responseText);
+        GetCorrectBearerToken(responseText);
+
+    end;
+    // End GetMagentoAccessTokenKey NI 1.00
+
+    // Begin GetCorrectBearerToken NI 1.00
+    procedure GetCorrectBearerToken(BearerTokenKey: Text[1024])
+    var
+        tokenNo: text[1024];
+        NewBearerTokenNo: text[1024];
+        TokenLen: Integer;
+        NewTokenLen: Integer;
+        DeleteFrom: Integer;
+    begin
+        if BearerTokenKey <> '' then begin
+            tokenNo := BearerTokenKey;
+            TokenLen := StrLen(tokenNo);
+            NewBearerTokenNo := DelStr(tokenNo, TokenLen, 1);
+            //Message(NewBearerTokenNo);
+            NewTokenLen := StrLen(NewBearerTokenNo);
+            DeleteFrom := DeleteFrom - (DeleteFrom - 1);
+            var_bearerToken := DelStr(NewBearerTokenNo, DeleteFrom, 1);
+            //Message(var_bearerToken);
+            //CreateProductFromBC();
+
+        end;
+    end;
+    // End GetCorrectBearerToken NI 1.00
+
+    // Begin SetConnect  NI 1.00
+    procedure setConnect(Url: text; Method: Text; AuthorizationKey: Text; AuthorizationValue: Text; body: text) responseText: Text;
+    var
+        content: HttpContent;
+        contentHeaders: HttpHeaders;
+        request: HttpRequestMessage;
+        Response: HttpResponseMessage;
+        Client: HttpClient;
+        JsonText: Text;
+    begin
+        // Add the payload to the content
+
+        content.WriteFrom(body);
+        // Retrieve the contentHeaders associated with the content
+        content.GetHeaders(contentHeaders);
+        contentHeaders.Clear();
+        contentHeaders.Add('Content-Type', 'application/json');
+        request.GetHeaders(contentHeaders);
+        contentHeaders.Add('Authorization', StrSubstNo(AuthorizationKey + ' ' + '%1', AuthorizationValue));
+        contentHeaders.Add('Accept', 'application/json');
+        request.Content := content;
+        request.SetRequestUri(Url);
+        request.Method := 'POST';
+        client.Send(request, response);
+        response.Content().ReadAs(responseText);
+        //Message(responseText);
+        response.Content().ReadAs(JSonText);
+        if JsonText <> '' then
+            Message('Successfully Submitted To Magento!');
+        exit(JsonText);
+    end;
+    // End Setconnect NI 1.00
+
+    // Begin CreateProductFromBC NI 1.00
+    procedure CreateProductFromBC(ItemCode: Code[20])
+    var
+        client: HttpClient;
+        request: HttpRequestMessage;
+        response: HttpResponseMessage;
+        contentHeaders: HttpHeaders;
+        content: HttpContent;
+        JsonObj: JsonObject;
+        JsonArray: JsonArray;
+        PJsonObj: JsonObject;
+        ATJsonobj: JsonObject;
+        CatLJsonobj: JsonObject;
+        STIJsonobj: JsonObject;
+        TjsonText: Text;
+    begin
+        lreItem.reset;
+        lreItem.SetRange("No.", ItemCode);
+        if lreItem.FindFirst() then begin
+            // Create API Json Format------------------Begin--------------
+
+            PJsonObj.add('sku', lreItem."No.");
+            PJsonObj.Add('name', lreItem.Description);
+            PJsonObj.Add('attribute_set_id', 4);
+            PJsonObj.Add('price', 1500);
+            PJsonObj.Add('status', 1);
+            PJsonObj.Add('visibility', 1);
+            PJsonObj.Add('type_id', 'simple');
+            PJsonObj.Add('weight', '1');
+            JsonObj.Add('product', PJsonObj);
+            CatLJsonobj.Add('position', 0);
+            CatLJsonobj.Add('category_id', '6');
+            JsonArray.Add(CatLJsonobj);
+            ATJsonobj.Add('category_links', JsonArray);
+            PJsonObj.Add('extension_attributes', ATJsonobj);
+            STIJsonobj.Add('qty', 10);
+            STIJsonobj.Add('is_in_stock', true);
+            ATJsonobj.Add('stock_item', STIJsonobj);
+            // Create API Json Format--------------------------End------------
+
+            JsonObj.WriteTo(TjsonText);
+            //Message(TjsonText);
+
+        end;
+        //Get Access Token From Magento For Authorization
+        GetMagentoAccessTokenKey(MagentoAccessURL);
+
+        // Connect To Magento API for Send Product Data To Magento API.
+        setConnect(MagentoProductURL, 'POST', 'Bearer', var_bearerToken, TjsonText);
+    end;
+    // End CreateProductFromBC NI 1.00
+
+
+    var
+        lreItem: Record Item;
+        var_bearerToken: Text[1024];
+}
